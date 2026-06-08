@@ -37,11 +37,18 @@ android {
     buildFeatures {
         compose = true
     }
+
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("org.webrtc:google-webrtc")).using(module("io.github.webrtc-sdk:android:144.7559.05"))
+        }
+    }
 }
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.compose.ui)
@@ -65,5 +72,5 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
     implementation("com.google.firebase:firebase-database")
 
-    implementation("org.webrtc:google-webrtc:1.0.32006")
+    implementation(libs.webrtc)
 }
