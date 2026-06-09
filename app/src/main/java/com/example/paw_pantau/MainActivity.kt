@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -35,7 +36,8 @@ class MainActivity : AppCompatActivity() {
     private var videoSource: VideoSource? = null
     private var videoTrack: VideoTrack? = null
     private var currentRoomId: String? = null
-    private var isCctvMode: Boolean = false // Tambahkan flag untuk cek role
+    private var isCctvMode: Boolean = false
+    private var isFlashOn: Boolean = false // Track status senter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.roleSelectionLayout).visibility = View.VISIBLE
         findViewById<View>(R.id.viewFinder).visibility = View.GONE
         findViewById<View>(R.id.remoteVideoContainer).visibility = View.GONE
+        findViewById<ImageButton>(R.id.btnToggleFlash).visibility = View.GONE // Sembunyikan tombol senter
         
         // Bersihkan frame terakhir di renderer agar tidak stuck saat buka lagi
         remoteVideoView.clearImage()
@@ -265,11 +268,25 @@ class MainActivity : AppCompatActivity() {
                         try {
                             cameraProvider.unbindAll()
                             // Bind kedua preview: satu untuk layar, satu untuk WebRTC
-                            cameraProvider.bindToLifecycle(
+                            val cameraInstance = cameraProvider.bindToLifecycle(
                                 this, CameraSelector.DEFAULT_BACK_CAMERA, preview, webRtcPreview
                             )
 
                             android.util.Log.d("MainActivity", "Camera bound to lifecycle")
+
+                            // LISTENER SENTER (Hanya untuk CCTV)
+                            val roomRef = com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                                .child("room_list").child(currentRoomId ?: "")
+                            
+                            roomRef.child("flashlight_on").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+                                override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                                    val shouldBeOn = snapshot.getValue(Boolean::class.java) ?: false
+                                    cameraInstance.cameraControl.enableTorch(shouldBeOn)
+                                    android.util.Log.d("MainActivity", "Remote Flashlight Toggle: $shouldBeOn")
+                                }
+                                override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
+                            })
+
                         } catch (exc: Exception) {
                             android.util.Log.e("MainActivity", "Camera binding failed", exc)
                         }
@@ -412,14 +429,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initMonitor(roomId: String) {
-        isCctvMode = false // Tandai sebagai Monitor
+        isCctvMode = false
+        currentRoomId = roomId // Pastikan lirik ID tersimpan
         Toast.makeText(this, "Menghubungkan ke $roomId...", Toast.LENGTH_SHORT).show()
         
-        // Beritahu CCTV bahwa ada Monitor baru yang bergabung (Request Session Baru)
-        com.google.firebase.database.FirebaseDatabase.getInstance().reference
-            .child("rooms").child(roomId).child("monitor_joined").setValue(System.currentTimeMillis())
-
-        findViewById<View>(R.id.roleSelectionLayout).visibility = View.GONE
+        // Tampilkan tombol senter khusus di Monitor
+        val btnFlash = findViewById<ImageButton>(R.id.btnToggleFlash)
+        btnFlash.visibility = View.VISIBLE
+        btnFlash.setOnClickListener {
+            isFlashOn = !isFlashOn
+            com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                .child("room_list").child(roomId).child("flashlight_on").setValue(isFlashOn)
+            
+            // Berikan feedback visual (ubah warna jika menyala)
+            if (isFlashOn) {
+                btnFlash.setColorFilter(android.graphics.Color.YELLOW)
+            } else {
+                btnFlash.setColorFilter(android.graphics.Color.WHITE)
+            }
+        }
         val container = findViewById<View>(R.id.remoteVideoContainer)
         container.visibility = View.VISIBLE
         
