@@ -155,12 +155,13 @@ class MainActivity : AppCompatActivity() {
             
             try {
                 val context = eglBase?.eglBaseContext ?: return
-                val roomId = roomName.lowercase().replace(" ", "_")
-                currentRoomId = roomId
+                // BUAT ID UNIK: Nama Ruangan + Timestamp
+                val uniqueId = "${roomName.lowercase().replace(" ", "_")}_${System.currentTimeMillis()}"
+                currentRoomId = uniqueId
                 
                 // Referensi ke status ruangan
                 val roomRef = com.google.firebase.database.FirebaseDatabase.getInstance().reference
-                    .child("room_list").child(roomId)
+                    .child("room_list").child(uniqueId)
                 
                 // Simpan metadata ruangan
                 roomRef.setValue(mapOf(
@@ -172,7 +173,7 @@ class MainActivity : AppCompatActivity() {
                 // OTOMATIS OFFLINE SAAT DISCONNECT (Fitur onDisconnect Firebase)
                 roomRef.child("status").onDisconnect().setValue("offline")
 
-                webRTCHelper = WebRTCHelper(this, context, "CCTV", roomId) { }
+                webRTCHelper = WebRTCHelper(this, context, "CCTV", uniqueId) { }
                 startCamera()
             } catch (e: Exception) {
                 android.util.Log.e("MainActivity", "CCTV Init Error", e)
