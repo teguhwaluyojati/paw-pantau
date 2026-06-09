@@ -9,6 +9,7 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -111,6 +112,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.viewFinder).visibility = View.GONE
         findViewById<View>(R.id.remoteVideoContainer).visibility = View.GONE
         findViewById<ImageButton>(R.id.btnToggleFlash).visibility = View.GONE // Sembunyikan tombol senter
+        findViewById<Button>(R.id.btnStealthMode).visibility = View.GONE // Sembunyikan tombol stealth
+        findViewById<View>(R.id.stealthOverlay).visibility = View.GONE // Sembunyikan overlay
         
         // Bersihkan frame terakhir di renderer agar tidak stuck saat buka lagi
         remoteVideoView.clearImage()
@@ -154,6 +157,22 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Memulai Mode CCTV: $roomName", Toast.LENGTH_SHORT).show()
             viewFinder.visibility = View.VISIBLE
             findViewById<View>(R.id.roleSelectionLayout).visibility = View.GONE
+            
+            // Tampilkan tombol Stealth saat CCTV aktif
+            val btnStealth = findViewById<Button>(R.id.btnStealthMode)
+            val stealthOverlay = findViewById<View>(R.id.stealthOverlay)
+            btnStealth.visibility = View.VISIBLE
+            btnStealth.setOnClickListener {
+                stealthOverlay.visibility = View.VISIBLE
+                btnStealth.visibility = View.GONE
+            }
+            
+            // Ketuk layar hitam untuk kembali
+            stealthOverlay.setOnClickListener {
+                stealthOverlay.visibility = View.GONE
+                btnStealth.visibility = View.VISIBLE
+            }
+
             isCctvMode = true // Tandai sebagai CCTV
             
             try {
