@@ -38,7 +38,8 @@ class MainActivity : AppCompatActivity() {
     private var videoTrack: VideoTrack? = null
     private var currentRoomId: String? = null
     private var isCctvMode: Boolean = false
-    private var isFlashOn: Boolean = false // Track status senter
+    private var isFlashOn: Boolean = false
+    private var isMicOn: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,9 +112,12 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.roleSelectionLayout).visibility = View.VISIBLE
         findViewById<View>(R.id.viewFinder).visibility = View.GONE
         findViewById<View>(R.id.remoteVideoContainer).visibility = View.GONE
-        findViewById<ImageButton>(R.id.btnToggleFlash).visibility = View.GONE // Sembunyikan tombol senter
-        findViewById<Button>(R.id.btnStealthMode).visibility = View.GONE // Sembunyikan tombol stealth
+        findViewById<View>(R.id.monitorControls).visibility = View.GONE
+        findViewById<ImageButton>(R.id.btnToggleFlash).visibility = View.GONE
+        findViewById<ImageButton>(R.id.btnToggleMic).visibility = View.GONE
+        findViewById<Button>(R.id.btnStealthMode).visibility = View.GONE
         findViewById<View>(R.id.stealthOverlay).visibility = View.GONE // Sembunyikan overlay
+        findViewById<TextView>(R.id.tvIntercomActive).visibility = View.GONE // Sembunyikan indikator interkom
         
         // Bersihkan frame terakhir di renderer agar tidak stuck saat buka lagi
         remoteVideoView.clearImage()
@@ -197,6 +201,16 @@ class MainActivity : AppCompatActivity() {
 
                 webRTCHelper = WebRTCHelper(this, context, "CCTV", uniqueId) { }
                 startCamera()
+
+                // LISTENER INTERKOM (CCTV tahu kalau Monitor sedang bicara)
+                roomRef.child("intercom_active").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+                    override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                        val active = snapshot.getValue(Boolean::class.java) ?: false
+                        val indicator = findViewById<TextView>(R.id.tvIntercomActive)
+                        indicator.visibility = if (active) View.VISIBLE else View.GONE
+                    }
+                    override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
+                })
             } catch (e: Exception) {
                 android.util.Log.e("MainActivity", "CCTV Init Error", e)
             }
@@ -452,23 +466,43 @@ class MainActivity : AppCompatActivity() {
         currentRoomId = roomId // Pastikan lirik ID tersimpan
         Toast.makeText(this, "Menghubungkan ke $roomId...", Toast.LENGTH_SHORT).show()
         
-        // Tampilkan tombol senter khusus di Monitor
+        val container = findViewById<View>(R.id.remoteVideoContainer)
+        container.visibility = View.VISIBLE
+        
+        // Tampilkan kontrol monitor
+        findViewById<View>(R.id.monitorControls).visibility = View.VISIBLE
         val btnFlash = findViewById<ImageButton>(R.id.btnToggleFlash)
+        val btnMic = findViewById<ImageButton>(R.id.btnToggleMic)
+        
         btnFlash.visibility = View.VISIBLE
         btnFlash.setOnClickListener {
             isFlashOn = !isFlashOn
             com.google.firebase.database.FirebaseDatabase.getInstance().reference
                 .child("room_list").child(roomId).child("flashlight_on").setValue(isFlashOn)
             
-            // Berikan feedback visual (ubah warna jika menyala)
             if (isFlashOn) {
                 btnFlash.setColorFilter(android.graphics.Color.YELLOW)
             } else {
                 btnFlash.setColorFilter(android.graphics.Color.WHITE)
             }
         }
-        val container = findViewById<View>(R.id.remoteVideoContainer)
-        container.visibility = View.VISIBLE
+
+        btnMic.visibility = View.VISIBLE
+        btnMic.setOnClickListener {
+            isMicOn = !isMicOn
+            webRTCHelper?.setMicEnabled(isMicOn)
+            
+            // Beri tahu CCTV bahwa kita sedang bicara
+            com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                .child("room_list").child(roomId).child("intercom_active").setValue(isMicOn)
+
+            if (isMicOn) {
+                btnMic.setColorFilter(android.graphics.Color.CYAN)
+                Toast.makeText(this, "Mic Aktif - Kamu bisa bicara sekarang", Toast.LENGTH_SHORT).show()
+            } else {
+                btnMic.setColorFilter(android.graphics.Color.WHITE)
+            }
+        }
         
         // --- LOGIKA ZOOM & PAN ---
         var scaleFactor = 1.0f

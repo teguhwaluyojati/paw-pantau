@@ -63,19 +63,38 @@
 
     </FrameLayout>
 
-    <ImageButton
-        android:id="@+id/btnToggleFlash"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
+    <LinearLayout
+        android:id="@+id/monitorControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
         android:layout_marginBottom="48dp"
-        android:background="@drawable/bg_circle_button"
-        android:contentDescription="Toggle Flashlight"
-        android:scaleType="fitCenter"
-        android:src="@drawable/ic_flashlight"
-        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnToggleFlash"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/bg_circle_button"
+            android:contentDescription="Toggle Flashlight"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_flashlight"
+            android:visibility="gone" />
+
+        <ImageButton
+            android:id="@+id/btnToggleMic"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:background="@drawable/bg_circle_button"
+            android:contentDescription="Toggle Mic"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_mic"
+            android:visibility="gone" />
+
+    </LinearLayout>
 
     <androidx.camera.view.PreviewView
         android:id="@+id/viewFinder"
@@ -116,5 +135,20 @@
             android:textColor="#333333"
             android:textSize="16sp" />
     </FrameLayout>
+
+    <TextView
+        android:id="@+id/tvIntercomActive"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:background="#80FF0000"
+        android:padding="8dp"
+        android:text="🎙️ SESEORANG SEDANG BICARA..."
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -26,7 +26,9 @@ class WebRTCHelper(
     private var answerListener: ValueEventListener? = null
     private var iceCandidateListener: com.google.firebase.database.ChildEventListener? = null
     private var sessionListener: ValueEventListener? = null
-    private var savedVideoTrack: VideoTrack? = null // Simpan track untuk restart
+    private var intercomListener: ValueEventListener? = null
+    private var savedVideoTrack: VideoTrack? = null
+    private var localAudioTrack: AudioTrack? = null
 
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
@@ -60,6 +62,11 @@ class WebRTCHelper(
         Log.d(TAG, "CCTV: Start Streaming")
         savedVideoTrack = videoTrack
         
+        // Buat Audio Track untuk CCTV (selalu standby)
+        val audioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
+        localAudioTrack = peerConnectionFactory?.createAudioTrack("AUDIO_TRACK", audioSource)
+        localAudioTrack?.setEnabled(true) // Mic CCTV aktif default agar Monitor bisa dengar
+
         // CCTV mendengarkan jika ada monitor baru yang masuk
         sessionListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -85,11 +92,13 @@ class WebRTCHelper(
         peerConnection?.dispose()
         createPeerConnection()
         
-        val streamId = "ARDAMS"
+        val streamId = "main_stream"
         peerConnection?.addTrack(track, listOf(streamId))
+        localAudioTrack?.let { peerConnection?.addTrack(it, listOf(streamId)) }
         
         val constraints = MediaConstraints()
         constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
+        constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
         
         peerConnection?.createOffer(object : SimpleSdpObserver() {
             override fun onCreateSuccess(sdp: SessionDescription?) {
@@ -110,15 +119,30 @@ class WebRTCHelper(
 
     fun startMonitoring() {
         Log.d(TAG, "MONITOR: Start Monitoring")
-        // Ensure database is clean or at least we are listening
+        
+        // Buat Audio Track untuk Monitor (untuk bicara ke CCTV)
+        val audioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
+        localAudioTrack = peerConnectionFactory?.createAudioTrack("AUDIO_TRACK", audioSource)
+        localAudioTrack?.setEnabled(false) // Mati secara default, aktif saat tombol "Bicara" ditekan
+
         createPeerConnection()
         
-        // Add transceiver for video to ensure we can receive it
+        // Monitor kirim audio ke CCTV
+        peerConnection?.addTrack(localAudioTrack, listOf("main_stream"))
+        
+        // Add transceiver for video & audio
         peerConnection?.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO, 
             RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.RECV_ONLY))
+        peerConnection?.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO, 
+            RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_RECV))
 
         listenForOffer()
         listenForIceCandidates("cctv_candidates")
+    }
+
+    fun setMicEnabled(enable: Boolean) {
+        localAudioTrack?.setEnabled(enable)
+        Log.d(TAG, "Mic Enabled: $enable")
     }
 
     private fun createPeerConnection() {
@@ -293,6 +317,7 @@ class WebRTCHelper(
         offerListener?.let { database.child("offer").removeEventListener(it) }
         answerListener?.let { database.child("answer").removeEventListener(it) }
         sessionListener?.let { database.child("monitor_joined").removeEventListener(it) }
+        intercomListener?.let { database.child("intercom_active").removeEventListener(it) }
         iceCandidateListener?.let {
             val path = if (role == "CCTV") "monitor_candidates" else "cctv_candidates"
             database.child(path).removeEventListener(it)
