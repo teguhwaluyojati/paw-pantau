@@ -34,7 +34,8 @@ class MainActivity : AppCompatActivity() {
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private var videoSource: VideoSource? = null
     private var videoTrack: VideoTrack? = null
-    private var currentRoomId: String? = null // Simpan roomId aktif
+    private var currentRoomId: String? = null
+    private var isCctvMode: Boolean = false // Tambahkan flag untuk cek role
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,7 +99,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun resetToDashboard() {
         // Hentikan semua proses WebRTC & Kamera
-        stopWebRTC()
+        disposeWebRTC() // Gunakan disposeWebRTC agar lebih bersih daripada stopWebRTC
         try {
             ProcessCameraProvider.getInstance(this).get().unbindAll()
         } catch (e: Exception) {}
@@ -107,6 +108,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.roleSelectionLayout).visibility = View.VISIBLE
         findViewById<View>(R.id.viewFinder).visibility = View.GONE
         findViewById<View>(R.id.remoteVideoContainer).visibility = View.GONE
+        
+        // Bersihkan frame terakhir di renderer agar tidak stuck saat buka lagi
+        remoteVideoView.clearImage()
         
         Toast.makeText(this, "Kembali ke Dashboard", Toast.LENGTH_SHORT).show()
     }
@@ -147,11 +151,12 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Memulai Mode CCTV: $roomName", Toast.LENGTH_SHORT).show()
             viewFinder.visibility = View.VISIBLE
             findViewById<View>(R.id.roleSelectionLayout).visibility = View.GONE
+            isCctvMode = true // Tandai sebagai CCTV
             
             try {
                 val context = eglBase?.eglBaseContext ?: return
                 val roomId = roomName.lowercase().replace(" ", "_")
-                currentRoomId = roomId // Simpan ID
+                currentRoomId = roomId
                 
                 // Referensi ke status ruangan
                 val roomRef = com.google.firebase.database.FirebaseDatabase.getInstance().reference
@@ -292,12 +297,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopWebRTC() {
-        // SET OFFLINE SECARA MANUAL
-        currentRoomId?.let {
+        // HANYA SET OFFLINE JIKA KITA ADALAH CCTV
+        if (isCctvMode && currentRoomId != null) {
             com.google.firebase.database.FirebaseDatabase.getInstance().reference
-                .child("room_list").child(it).child("status").setValue("offline")
+                .child("room_list").child(currentRoomId!!).child("status").setValue("offline")
         }
         currentRoomId = null
+        isCctvMode = false
 
         surfaceTextureHelper?.stopListening()
         
@@ -392,7 +398,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initMonitor(roomId: String) {
+        isCctvMode = false // Tandai sebagai Monitor
         Toast.makeText(this, "Menghubungkan ke $roomId...", Toast.LENGTH_SHORT).show()
+        
+        // Beritahu CCTV bahwa ada Monitor baru yang bergabung (Request Session Baru)
+        com.google.firebase.database.FirebaseDatabase.getInstance().reference
+            .child("rooms").child(roomId).child("monitor_joined").setValue(System.currentTimeMillis())
+
         findViewById<View>(R.id.roleSelectionLayout).visibility = View.GONE
         val container = findViewById<View>(R.id.remoteVideoContainer)
         container.visibility = View.VISIBLE

@@ -22,6 +22,12 @@ class WebRTCHelper(
     private val iceCandidateQueue = mutableListOf<IceCandidate>()
     private var isRemoteDescriptionSet = false
 
+    private var offerListener: ValueEventListener? = null
+    private var answerListener: ValueEventListener? = null
+    private var iceCandidateListener: com.google.firebase.database.ChildEventListener? = null
+    private var sessionListener: ValueEventListener? = null
+    private var savedVideoTrack: VideoTrack? = null // Simpan track untuk restart
+
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
     )
@@ -52,36 +58,54 @@ class WebRTCHelper(
 
     fun startStreaming(videoTrack: VideoTrack) {
         Log.d(TAG, "CCTV: Start Streaming")
-        database.removeValue().addOnCompleteListener {
-            Log.d(TAG, "CCTV: Database cleared, creating peer connection")
-            createPeerConnection()
-            // Menambahkan track dengan stream ID agar receiver bisa mengenalinya
-            val streamId = "ARDAMS"
-            peerConnection?.addTrack(videoTrack, listOf(streamId))
-            
-            val constraints = MediaConstraints()
-            constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
-            constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
-            
-            peerConnection?.createOffer(object : SimpleSdpObserver() {
-                override fun onCreateSuccess(sdp: SessionDescription?) {
-                    super.onCreateSuccess(sdp)
-                    Log.d(TAG, "CCTV: Offer Created")
-                    sdp?.let {
-                        peerConnection?.setLocalDescription(object : SimpleSdpObserver() {
-                            override fun onSetSuccess() {
-                                Log.d(TAG, "CCTV: Local Description Set Success")
-                                database.child("offer").setValue(mapOf("sdp" to it.description, "type" to it.type.canonicalForm()))
-                                Log.d(TAG, "CCTV: Offer Sent to Firebase")
-                            }
-                        }, it)
-                    }
+        savedVideoTrack = videoTrack
+        
+        // CCTV mendengarkan jika ada monitor baru yang masuk
+        sessionListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (snapshot.exists() && role == "CCTV") {
+                    Log.d(TAG, "CCTV: New Monitor detected, restarting signaling...")
+                    restartStreaming()
                 }
-            }, constraints)
-            
-            listenForAnswer()
-            listenForIceCandidates("monitor_candidates")
+            }
+            override fun onCancelled(error: DatabaseError) {}
         }
+        database.child("monitor_joined").addValueEventListener(sessionListener!!)
+        
+        restartStreaming()
+    }
+
+    private fun restartStreaming() {
+        val track = savedVideoTrack ?: return
+        database.child("offer").removeValue()
+        database.child("answer").removeValue()
+        database.child("cctv_candidates").removeValue()
+        database.child("monitor_candidates").removeValue()
+
+        peerConnection?.dispose()
+        createPeerConnection()
+        
+        val streamId = "ARDAMS"
+        peerConnection?.addTrack(track, listOf(streamId))
+        
+        val constraints = MediaConstraints()
+        constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
+        
+        peerConnection?.createOffer(object : SimpleSdpObserver() {
+            override fun onCreateSuccess(sdp: SessionDescription?) {
+                super.onCreateSuccess(sdp)
+                sdp?.let {
+                    peerConnection?.setLocalDescription(object : SimpleSdpObserver() {
+                        override fun onSetSuccess() {
+                            database.child("offer").setValue(mapOf("sdp" to it.description, "type" to it.type.canonicalForm()))
+                        }
+                    }, it)
+                }
+            }
+        }, constraints)
+        
+        listenForAnswer()
+        listenForIceCandidates("monitor_candidates")
     }
 
     fun startMonitoring() {
@@ -153,7 +177,7 @@ class WebRTCHelper(
     }
 
     private fun listenForOffer() {
-        database.child("offer").addValueEventListener(object : ValueEventListener {
+        offerListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (snapshot.exists() && role == "MONITOR") {
                     Log.d(TAG, "MONITOR: Offer received from Firebase")
@@ -195,11 +219,12 @@ class WebRTCHelper(
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Firebase Error: ${error.message}")
             }
-        })
+        }
+        database.child("offer").addValueEventListener(offerListener!!)
     }
 
     private fun listenForAnswer() {
-        database.child("answer").addValueEventListener(object : ValueEventListener {
+        answerListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (snapshot.exists() && role == "CCTV") {
                     Log.d(TAG, "CCTV: Answer received from Firebase")
@@ -215,11 +240,12 @@ class WebRTCHelper(
                 }
             }
             override fun onCancelled(error: DatabaseError) {}
-        })
+        }
+        database.child("answer").addValueEventListener(answerListener!!)
     }
 
     private fun listenForIceCandidates(path: String) {
-        database.child(path).addChildEventListener(object : com.google.firebase.database.ChildEventListener {
+        iceCandidateListener = object : com.google.firebase.database.ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
                 Log.d(TAG, "$role: Remote ICE Candidate received from $path")
                 try {
@@ -244,7 +270,8 @@ class WebRTCHelper(
             override fun onChildRemoved(snapshot: DataSnapshot) {}
             override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
             override fun onCancelled(error: DatabaseError) {}
-        })
+        }
+        database.child(path).addChildEventListener(iceCandidateListener!!)
     }
 
     private fun drainIceCandidateQueue() {
@@ -256,7 +283,29 @@ class WebRTCHelper(
     }
 
     fun close() {
-        peerConnection?.close()
+        // Hapus data signaling lama jika kita adalah Monitor
+        if (role == "MONITOR") {
+            database.child("answer").removeValue()
+            database.child("monitor_candidates").removeValue()
+        }
+
+        // Hapus semua listener Firebase
+        offerListener?.let { database.child("offer").removeEventListener(it) }
+        answerListener?.let { database.child("answer").removeEventListener(it) }
+        sessionListener?.let { database.child("monitor_joined").removeEventListener(it) }
+        iceCandidateListener?.let {
+            val path = if (role == "CCTV") "monitor_candidates" else "cctv_candidates"
+            database.child(path).removeEventListener(it)
+        }
+        
+        offerListener = null
+        answerListener = null
+        sessionListener = null
+        iceCandidateListener = null
+
+        isRemoteDescriptionSet = false
+        iceCandidateQueue.clear()
+        peerConnection?.dispose() // Gunakan dispose() alih-alih close() untuk cleanup total
         peerConnection = null
     }
 
