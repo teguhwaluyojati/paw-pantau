@@ -9,6 +9,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -67,6 +68,47 @@ class MainActivity : AppCompatActivity() {
             startMonitorMode()
             roleSelectionLayout.visibility = View.GONE
         }
+
+        // Tambahkan Handler untuk Tombol Back / Swipe Back
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val roleLayout = findViewById<View>(R.id.roleSelectionLayout)
+                // Jika sedang tidak di menu utama (salah satu mode aktif)
+                if (roleLayout.visibility == View.GONE) {
+                    showExitConfirmation()
+                } else {
+                    // Jika di menu utama, biarkan perilaku back standar (keluar app)
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
+    }
+
+    private fun showExitConfirmation() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Konfirmasi Keluar")
+            .setMessage("Apakah Anda yakin ingin menghentikan sesi ini dan kembali ke menu utama?")
+            .setPositiveButton("Ya") { _, _ ->
+                resetToDashboard()
+            }
+            .setNegativeButton("Tidak", null)
+            .show()
+    }
+
+    private fun resetToDashboard() {
+        // Hentikan semua proses WebRTC & Kamera
+        stopWebRTC()
+        try {
+            ProcessCameraProvider.getInstance(this).get().unbindAll()
+        } catch (e: Exception) {}
+
+        // Reset UI
+        findViewById<View>(R.id.roleSelectionLayout).visibility = View.VISIBLE
+        findViewById<View>(R.id.viewFinder).visibility = View.GONE
+        findViewById<View>(R.id.remoteVideoContainer).visibility = View.GONE
+        
+        Toast.makeText(this, "Kembali ke Dashboard", Toast.LENGTH_SHORT).show()
     }
 
     private fun startCctvMode() {
