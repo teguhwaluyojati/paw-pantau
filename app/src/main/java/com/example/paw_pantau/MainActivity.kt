@@ -348,6 +348,7 @@ class MainActivity : AppCompatActivity() {
             
             if (rooms.isEmpty()) {
                 Toast.makeText(this, "Tidak ada CCTV terdaftar", Toast.LENGTH_SHORT).show()
+                resetToDashboard()
                 return@addOnSuccessListener
             }
 
@@ -368,10 +369,16 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this, "CCTV ini sedang Offline", Toast.LENGTH_SHORT).show()
                     }
                 }
-                .setNegativeButton("Batal", null)
+                .setNegativeButton("Batal") { _, _ ->
+                    resetToDashboard()
+                }
+                .setOnCancelListener {
+                    resetToDashboard()
+                }
                 .show()
         }.addOnFailureListener {
             Toast.makeText(this, "Gagal mengambil daftar CCTV", Toast.LENGTH_SHORT).show()
+            resetToDashboard()
         }
     }
 
@@ -392,9 +399,15 @@ class MainActivity : AppCompatActivity() {
                     initMonitor(roomId)
                 } else {
                     Toast.makeText(this, "Password Salah!", Toast.LENGTH_SHORT).show()
+                    resetToDashboard()
                 }
             }
-            .setNegativeButton("Batal", null)
+            .setNegativeButton("Batal") { _, _ ->
+                resetToDashboard()
+            }
+            .setOnCancelListener {
+                resetToDashboard()
+            }
             .show()
     }
 
