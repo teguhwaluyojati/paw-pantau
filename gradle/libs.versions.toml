@@ -10,6 +10,7 @@ appcompat = "1.7.0"
 constraintlayout = "2.1.4"
 kotlin = "2.2.10"
 composeBom = "2026.02.01"
+googleServices = "4.4.4"
 webrtc = "144.7559.05"
 
 [libraries]
@@ -34,4 +35,5 @@ webrtc = { group = "io.github.webrtc-sdk", name = "android", version.ref = "webr
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 

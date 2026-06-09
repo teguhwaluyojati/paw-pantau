@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "921353483407",
+    "firebase_url": "https://paw-pantau-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "paw-pantau",
+    "storage_bucket": "paw-pantau.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:921353483407:android:d74b8878961a531e22ecfa",
+        "android_client_info": {
+          "package_name": "com.example.paw_pantau"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBVFZDXz03REJi3PGYH1IB2LO8S7ML8cTw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
